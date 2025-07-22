@@ -5,24 +5,21 @@ local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 local PlayerService = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
-local TweenService = game:GetService("TweenService")
 
 local Debug,LocalPlayer = false,PlayerService.LocalPlayer
 local MainAssetFolder = Debug and ReplicatedStorage.BracketV32
 	or InsertService:LoadLocalAsset("rbxassetid://9153139105")
 
-local function GetAsset(AssetPath)
-	AssetPath = AssetPath:split("/")
-	local Asset = MainAssetFolder
-	for Index,Name in pairs(AssetPath) do
-		Asset = Asset[Name]
-	end return Asset:Clone()
-end
-
+	local function GetAsset(AssetPath)
+		AssetPath = AssetPath:split("/")
+		local Asset = MainAssetFolder
+		for Index,Name in pairs(AssetPath) do
+			Asset = Asset[Name]
+		end return Asset:Clone()
+	end
 local function GetLongest(A,B)
 	return A > B and A or B
 end
-
 local function GetType(Object,Default,Type)
 	if typeof(Object) == Type then
 		return Object
@@ -30,38 +27,22 @@ local function GetType(Object,Default,Type)
 	return Default
 end
 
--- Mobile-friendly input handling
-local function IsMobile()
-	return UserInputService.TouchEnabled and not UserInputService.MouseEnabled
-end
-
-local function GetInputPosition(Input)
-	if IsMobile() and Input.UserInputType == Enum.UserInputType.Touch then
-		return Input.Position
-	else
-		return UserInputService:GetMouseLocation()
-	end
-end
-
 local function MakeDraggable(Dragger,Object,Callback)
 	local StartPosition,StartDrag = nil,nil
-	
 	Dragger.InputBegan:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-			StartPosition = GetInputPosition(Input)
+			StartPosition = UserInputService:GetMouseLocation()
 			StartDrag = Object.AbsolutePosition
 		end
 	end)
-	
 	UserInputService.InputChanged:Connect(function(Input)
 		if StartDrag and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
-			local Mouse = GetInputPosition(Input)
+			local Mouse = UserInputService:GetMouseLocation()
 			local Delta = Mouse - StartPosition
 			StartPosition = Mouse
 			Object.Position = Object.Position + UDim2.new(0,Delta.X,0,Delta.Y)
 		end
 	end)
-	
 	Dragger.InputEnded:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 			StartPosition,StartDrag = nil,nil
@@ -72,17 +53,15 @@ end
 
 local function MakeResizeable(Dragger,Object,MinSize,Callback)
 	local StartPosition,StartSize = nil,nil
-	
 	Dragger.InputBegan:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-			StartPosition = GetInputPosition(Input)
+			StartPosition = UserInputService:GetMouseLocation()
 			StartSize = Object.AbsoluteSize
 		end
 	end)
-	
 	UserInputService.InputChanged:Connect(function(Input)
 		if StartPosition and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
-			local Mouse = GetInputPosition(Input)
+			local Mouse = UserInputService:GetMouseLocation()
 			local Delta = Mouse - StartPosition
 
 			local Size = StartSize + Delta
@@ -91,7 +70,6 @@ local function MakeResizeable(Dragger,Object,MinSize,Callback)
 			Object.Size = UDim2.fromOffset(SizeX,SizeY)
 		end
 	end)
-	
 	Dragger.InputEnded:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 			StartPosition,StartSize = nil,nil
@@ -119,7 +97,6 @@ local function ChooseTab(ScreenAsset,TabButtonAsset,TabAsset)
 		end
 	end
 end
-
 local function ChooseTabSide(TabAsset,Mode)
 	if Mode == "Longest" then
 		if TabAsset.LeftSide.ListLayout.AbsoluteContentSize.Y > TabAsset.RightSide.ListLayout.AbsoluteContentSize.Y then
@@ -153,7 +130,6 @@ local function GetConfigs(PFName)
 	end
 	return Configs
 end
-
 local function ConfigsToList(PFName)
 	if not isfolder(PFName) then makefolder(PFName) end
 	if not isfolder(PFName.."\\Configs") then makefolder(PFName.."\\Configs") end
@@ -180,21 +156,34 @@ local function InitToolTip(Parent,ScreenAsset,Text)
 		ScreenAsset.ToolTip.Visible = false
 	end)
 end
-
 local function InitScreen()
 	local ScreenAsset = GetAsset("Screen/Bracket")
 	if not Debug then sethiddenproperty(ScreenAsset,"OnTopOfCoreBlur",true) end
 	ScreenAsset.Name = "Bracket " .. game:GetService("HttpService"):GenerateGUID(false)
 	ScreenAsset.Parent = Debug and LocalPlayer:FindFirstChildOfClass("PlayerGui") or CoreGui
 	
-	-- Mobile adjustments
-	if IsMobile() then
-		ScreenAsset.Watermark.Visible = false -- Hide watermark on mobile
+	-- Mobile input handling
+	if UserInputService.TouchEnabled then
+		-- Make buttons more touch-friendly
+		local function makeTouchFriendly(button)
+			button.Size = UDim2.new(1, 0, 0, 40) -- Larger touch targets
+			button.TextSize = 18 -- Larger text
+		end
+		
+		-- Apply to all buttons in the UI
+		local function processChildren(parent)
+			for _, child in ipairs(parent:GetDescendants()) do
+				if child:IsA("TextButton") then
+					makeTouchFriendly(child)
+				end
+			end
+		end
+		
+		processChildren(ScreenAsset)
 	end
 	
 	return {ScreenAsset = ScreenAsset}
 end
-
 local function InitWindow(ScreenAsset,Window)
 	local WindowAsset = GetAsset("Window/Window")
 
@@ -204,59 +193,40 @@ local function InitWindow(ScreenAsset,Window)
 	WindowAsset.Position = Window.Position
 	WindowAsset.Size = Window.Size
 
-	-- Mobile adjustments
-	if IsMobile() then
-		-- Make window larger for mobile by default
-		WindowAsset.Size = UDim2.new(0, math.min(600, Window.Size.X.Offset), 0, math.min(800, Window.Size.Y.Offset))
-		WindowAsset.Resize.Visible = false -- Disable resizing on mobile
-	end
-
 	MakeDraggable(WindowAsset.Drag,WindowAsset,function(Position)
 		Window.Position = Position
 	end)
-	
-	if not IsMobile() then -- Only allow resizing on PC
-		MakeResizeable(WindowAsset.Resize,WindowAsset,Vector2.new(296,296),function(Size)
-			Window.Size = Size
-		end)
-	end
+	MakeResizeable(WindowAsset.Resize,WindowAsset,Vector2.new(296,296),function(Size)
+		Window.Size = Size
+	end)
 
 	WindowAsset.TabButtonContainer.ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 		WindowAsset.TabButtonContainer.CanvasSize = UDim2.new(0,WindowAsset.TabButtonContainer.ListLayout.AbsoluteContentSize.X,0,0)
 	end)
-	
 	RunService.RenderStepped:Connect(function()
 		if WindowAsset.Visible then
-			local mousePos = UserInputService:GetMouseLocation()
-			if IsMobile() and UserInputService:GetFocusedTextBox() then
-				-- Adjust tooltip position when keyboard is open on mobile
-				mousePos = Vector2.new(mousePos.X, mousePos.Y - 300)
-			end
-			ScreenAsset.ToolTip.Position = UDim2.new(0, mousePos.X + 5, 0, mousePos.Y - 5)
+			ScreenAsset.ToolTip.Position = UDim2.new(0,UserInputService:GetMouseLocation().X + 5,0,UserInputService:GetMouseLocation().Y - 5)
 		end
 	end)
-	
 	RunService.RenderStepped:Connect(function()
 		Window.RainbowHue = os.clock()%10/10
 	end)
-
 	function Window:SetName(Name)
 		Window.Name = Name
 		WindowAsset.Title.Text = Name
 	end
-	
 	function Window:SetSize(Size)
 		Window.Size = Size
 		WindowAsset.Size = Size
 	end
-	
 	function Window:SetPosition(Position)
 		Window.Position = Position
-		WindowAsset.Position = Position
+		WindowAsset.Pisition = Position
 	end
-	
 	function Window:SetColor(Color)
-		if Color.R < 5/255 and Color.G < 5/255 and Color.B < 5/255 then
+		if Color.R < 5/255
+		and Color.G < 5/255
+		and Color.B < 5/255 then
 			Color = Color3.fromRGB(5,5,5)
 		end
 
@@ -270,22 +240,17 @@ local function InitWindow(ScreenAsset,Window)
 		end
 		Window.Color = Color
 	end
-	
 	function Window:Toggle(Boolean)
 		Window.Enabled = Boolean
 		WindowAsset.Visible = Window.Enabled
 
 		if not Debug then
-			RunService:SetRobloxGuiFocused(Window.Enabled and Window.Flags["UI/Blur"]) 
-		end
-		
-		if not Window.Enabled then 
-			for Index,Instance in pairs(ScreenAsset:GetChildren()) do
-				if Instance.Name == "Palette" or Instance.Name == "OptionContainer" then
-					Instance.Visible = false
-				end
-			end 
-		end
+		RunService:SetRobloxGuiFocused(Window.Enabled and Window.Flags["UI/Blur"]) end
+		if not Window.Enabled then for Index,Instance in pairs(ScreenAsset:GetChildren()) do
+			if Instance.Name == "Palette" or Instance.Name == "OptionContainer" then
+				Instance.Visible = false
+			end
+		end end
 	end
 
 	function Window:SetValue(Flag,Value)
@@ -310,14 +275,12 @@ local function InitWindow(ScreenAsset,Window)
 		Watermark.Enabled = GetType(Watermark.Enabled,false,"boolean")
 		Watermark.Flag = GetType(Watermark.Flag,"UI/Watermark/Position","string")
 
-		-- Don't show watermark on mobile
-		Watermark.Enabled = Watermark.Enabled and not IsMobile()
 		ScreenAsset.Watermark.Visible = Watermark.Enabled
 		ScreenAsset.Watermark.Title.Text = Watermark.Title
 		ScreenAsset.Watermark.Position = UDim2.new(0.95,0,0,10)
 		ScreenAsset.Watermark.Size = UDim2.new(
-			0,ScreenAsset.Watermark.Title.TextBounds.X + 6,
-			0,ScreenAsset.Watermark.Title.TextBounds.Y + 6)
+		0,ScreenAsset.Watermark.Title.TextBounds.X + 6,
+		0,ScreenAsset.Watermark.Title.TextBounds.Y + 6)
 		MakeDraggable(ScreenAsset.Watermark,ScreenAsset.Watermark,function(Position)
 			Window.Flags[Watermark.Flag] = 
 			{Position.X.Scale,Position.X.Offset,
@@ -325,7 +288,7 @@ local function InitWindow(ScreenAsset,Window)
 		end)
 
 		function Watermark:Toggle(Boolean)
-			Watermark.Enabled = Boolean and not IsMobile()
+			Watermark.Enabled = Boolean
 			ScreenAsset.Watermark.Visible = Watermark.Enabled
 		end
 		function Watermark:Transparency(Number)
@@ -362,7 +325,6 @@ local function InitWindow(ScreenAsset,Window)
 		end
 		writefile(PFName.."\\Configs\\"..Name..".json",HttpService:JSONEncode(Config))
 	end
-	
 	function Window:LoadConfig(PFName,Name)
 		if table.find(GetConfigs(PFName),Name) then
 			local DecodedJSON = HttpService:JSONDecode(readfile(PFName.."\\Configs\\"..Name..".json"))
@@ -373,13 +335,11 @@ local function InitWindow(ScreenAsset,Window)
 			end
 		end
 	end
-	
 	function Window:DeleteConfig(PFName,Name)
 		if table.find(GetConfigs(PFName),Name) then
 			delfile(PFName.."\\Configs\\"..Name..".json")
 		end
 	end
-	
 	function Window:GetDefaultConfig(PFName)
 		if not isfolder(PFName) then makefolder(PFName) end
 		if not isfolder(PFName.."\\Configs") then makefolder(PFName.."\\Configs") end
@@ -390,7 +350,6 @@ local function InitWindow(ScreenAsset,Window)
 			return DefaultConfig
 		end
 	end
-	
 	function Window:LoadDefaultConfig(PFName)
 		if not isfolder(PFName) then makefolder(PFName) end
 		if not isfolder(PFName.."\\Configs") then makefolder(PFName.."\\Configs") end
@@ -405,7 +364,6 @@ local function InitWindow(ScreenAsset,Window)
 	Window.Background = WindowAsset.Background
 	return WindowAsset
 end
-
 local function InitTab(ScreenAsset,WindowAsset,Window,Tab)
 	local TabButtonAsset = GetAsset("Tab/TabButton")
 	local TabAsset = GetAsset("Tab/Tab")
@@ -418,7 +376,6 @@ local function InitTab(ScreenAsset,WindowAsset,Window,Tab)
 	TabAsset.Visible = false
 
 	table.insert(Window.Colorable,TabButtonAsset.Highlight)
-	
 	TabAsset.LeftSide.ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 		if ChooseTabSide(TabAsset,"Longest") == TabAsset.LeftSide then
 			TabAsset.CanvasSize = UDim2.new(0,0,0,TabAsset.LeftSide.ListLayout.AbsoluteContentSize.Y + 21)
@@ -426,7 +383,6 @@ local function InitTab(ScreenAsset,WindowAsset,Window,Tab)
 			TabAsset.CanvasSize = UDim2.new(0,0,0,TabAsset.RightSide.ListLayout.AbsoluteContentSize.Y + 21)
 		end
 	end)
-	
 	TabAsset.RightSide.ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 		if ChooseTabSide(TabAsset,"Longest") == TabAsset.LeftSide then
 			TabAsset.CanvasSize = UDim2.new(0,0,0,TabAsset.LeftSide.ListLayout.AbsoluteContentSize.Y + 21)
@@ -434,17 +390,9 @@ local function InitTab(ScreenAsset,WindowAsset,Window,Tab)
 			TabAsset.CanvasSize = UDim2.new(0,0,0,TabAsset.RightSide.ListLayout.AbsoluteContentSize.Y + 21)
 		end
 	end)
-	
 	TabButtonAsset.MouseButton1Click:Connect(function()
 		ChooseTab(ScreenAsset,TabButtonAsset,TabAsset)
 	end)
-	
-	-- Mobile touch support
-	if IsMobile() then
-		TabButtonAsset.TouchTap:Connect(function()
-			ChooseTab(ScreenAsset,TabButtonAsset,TabAsset)
-		end)
-	end
 
 	if #WindowAsset.TabContainer:GetChildren() == 1 then
 		ChooseTab(ScreenAsset,TabButtonAsset,TabAsset)
@@ -460,7 +408,6 @@ local function InitTab(ScreenAsset,WindowAsset,Window,Tab)
 		return ChooseTabSide(TabAsset,Side)
 	end
 end
-
 local function InitSection(Parent,Section)
 	local SectionAsset = GetAsset("Section/Section")
 
@@ -480,7 +427,6 @@ local function InitSection(Parent,Section)
 
 	return SectionAsset.Container
 end
-
 local function InitDivider(Parent,Divider)
 	local DividerAsset = GetAsset("Divider/Divider")
 
@@ -506,7 +452,6 @@ local function InitDivider(Parent,Divider)
 		DividerAsset.Title.Text = Text
 	end
 end
-
 local function InitLabel(Parent,Label)
 	local LabelAsset = GetAsset("Label/Label")
 
@@ -522,7 +467,6 @@ local function InitLabel(Parent,Label)
 		LabelAsset.Text = Text
 	end
 end
-
 local function InitButton(Parent,ScreenAsset,Window,Button)
 	local ButtonAsset = GetAsset("Button/Button")
 
@@ -531,11 +475,6 @@ local function InitButton(Parent,ScreenAsset,Window,Button)
 
 	table.insert(Window.Colorable,ButtonAsset)
 	Button.Connection = ButtonAsset.MouseButton1Click:Connect(Button.Callback)
-	
-	-- Mobile touch support
-	if IsMobile() then
-		Button.Connection = ButtonAsset.TouchTap:Connect(Button.Callback)
-	end
 
 	ButtonAsset.MouseButton1Down:Connect(function()
 		ButtonAsset.BorderColor3 = Window.Color
@@ -557,17 +496,12 @@ local function InitButton(Parent,ScreenAsset,Window,Button)
 	function Button:SetCallback(Callback)
 		Button.Callback = Callback
 		Button.Connection:Disconnect()
-		if IsMobile() then
-			Button.Connection = ButtonAsset.TouchTap:Connect(Callback)
-		else
-			Button.Connection = ButtonAsset.MouseButton1Click:Connect(Callback)
-		end
+		Button.Connection = ButtonAsset.MouseButton1Click:Connect(Callback)
 	end
 	function Button:ToolTip(Text)
 		InitToolTip(ButtonAsset,ScreenAsset,Text)
 	end
 end
-
 local function InitToggle(Parent,ScreenAsset,Window,Toggle)
 	local ToggleAsset = GetAsset("Toggle/Toggle")
 
@@ -577,18 +511,22 @@ local function InitToggle(Parent,ScreenAsset,Window,Toggle)
 
 	table.insert(Window.Colorable,ToggleAsset.Tick)
 	
-	local function ToggleValue()
+	local function handleToggle()
 		Toggle.Value = not Toggle.Value
 		Window.Flags[Toggle.Flag] = Toggle.Value
 		Toggle.Callback(Toggle.Value)
 		ToggleAsset.Tick.BackgroundColor3 = Toggle.Value and Window.Color or Color3.fromRGB(60,60,60)
 	end
 	
-	ToggleAsset.MouseButton1Click:Connect(ToggleValue)
+	ToggleAsset.MouseButton1Click:Connect(handleToggle)
 	
-	-- Mobile touch support
-	if IsMobile() then
-		ToggleAsset.TouchTap:Connect(ToggleValue)
+	-- Add touch support
+	if UserInputService.TouchEnabled then
+		ToggleAsset.InputBegan:Connect(function(Input)
+			if Input.UserInputType == Enum.UserInputType.Touch then
+				handleToggle()
+			end
+		end)
 	end
 	
 	ToggleAsset.Title:GetPropertyChangedSignal("TextBounds"):Connect(function()
@@ -626,18 +564,10 @@ local function InitToggle(Parent,ScreenAsset,Window,Toggle)
 		ToggleAsset.Keybind.Text = "[ " .. Keybind.Value .. " ]"
 		Keybind.WaitingForBind = false
 
-		local function StartKeybind()
+		ToggleAsset.Keybind.MouseButton1Click:Connect(function()
 			ToggleAsset.Keybind.Text = "[ ... ]"
 			Keybind.WaitingForBind = true
-		end
-		
-		ToggleAsset.Keybind.MouseButton1Click:Connect(StartKeybind)
-		
-		-- Mobile touch support
-		if IsMobile() then
-			ToggleAsset.Keybind.TouchTap:Connect(StartKeybind)
-		end
-		
+		end)
 		ToggleAsset.Keybind:GetPropertyChangedSignal("TextBounds"):Connect(function()
 			ToggleAsset.Keybind.Size = UDim2.new(0,ToggleAsset.Keybind.TextBounds.X,1,0)
 			ToggleAsset.Title.Size = UDim2.new(1,-ToggleAsset.Keybind.Size.X.Offset - 20,1,0)
@@ -730,7 +660,6 @@ local function InitToggle(Parent,ScreenAsset,Window,Toggle)
 		return Keybind
 	end
 end
-
 local function InitSlider(Parent,ScreenAsset,Window,Slider)
 	local SliderAsset = GetAsset("Slider/Slider")
 
@@ -759,7 +688,6 @@ local function InitSlider(Parent,ScreenAsset,Window,Slider)
 		Window.Flags[Slider.Flag] = Slider.Value
 		Slider.Callback(Slider.Value)
 	end
-	
 	local function AttachToMouse(Input)
 		local XScale = math.clamp((Input.Position.X - SliderAsset.Background.AbsolutePosition.X) / SliderAsset.Background.AbsoluteSize.X,0,1)
 		local SliderPrecise = math.clamp(XScale * (Slider.Max - Slider.Min) + Slider.Min,Slider.Min,Slider.Max)
@@ -785,12 +713,10 @@ local function InitSlider(Parent,ScreenAsset,Window,Slider)
 		SliderAsset.Title.Size = UDim2.new(1,-SliderAsset.Value.Size.X.Offset,0,16)
 		SliderAsset.Size = UDim2.new(1,0,0,SliderAsset.Title.TextBounds.Y + 8)
 	end)
-	
 	SliderAsset.Value:GetPropertyChangedSignal("TextBounds"):Connect(function()
 		SliderAsset.Value.Size = UDim2.new(0,SliderAsset.Value.TextBounds.X,0,16)
 		SliderAsset.Title.Size = UDim2.new(1,-SliderAsset.Value.Size.X.Offset,0,16)
 	end)
-	
 	SliderAsset.Value.FocusLost:Connect(function()
 		if not tonumber(SliderAsset.Value.Text) then
 			SliderAsset.Value.Text = Slider.Value
@@ -803,26 +729,26 @@ local function InitSlider(Parent,ScreenAsset,Window,Slider)
 		SliderAsset.Value.Text = ""
 	end)
 	
-	SliderAsset.InputBegan:Connect(function(Input)
+	-- Mobile slider support
+	local function handleSliderInput(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 			AttachToMouse(Input)
 			Slider.Active = true
 		end
-	end)
+	end
 	
+	SliderAsset.InputBegan:Connect(handleSliderInput)
 	SliderAsset.InputEnded:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 			Slider.Active = false
 		end
 	end)
-	
 	UserInputService.InputChanged:Connect(function(Input)
 		if Slider.Active and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
 			AttachToMouse(Input)
 		end
 	end)
 end
-
 local function InitTextbox(Parent,ScreenAsset,Window,Textbox)
 	local TextboxAsset = GetAsset("Textbox/Textbox")
 
@@ -831,19 +757,12 @@ local function InitTextbox(Parent,ScreenAsset,Window,Textbox)
 	TextboxAsset.Background.Input.Text = Textbox.Value
 	TextboxAsset.Background.Input.PlaceholderText = Textbox.Placeholder
 
-	-- Mobile adjustments
-	if IsMobile() then
-		TextboxAsset.Background.Input.TextSize = 16 -- Larger text for mobile
-	end
-
 	TextboxAsset.Title:GetPropertyChangedSignal("TextBounds"):Connect(function()
 		TextboxAsset.Size = UDim2.new(1,0,0,(TextboxAsset.Title.TextBounds.Y + 2) + (TextboxAsset.Background.Input.TextBounds.Y + 2))
 	end)
-	
 	TextboxAsset.Background.Input:GetPropertyChangedSignal("TextBounds"):Connect(function()
 		TextboxAsset.Background.Size = UDim2.new(1,0,0,TextboxAsset.Background.Input.TextBounds.Y + 2)
 	end)
-	
 	TextboxAsset.Background.Input.FocusLost:Connect(function(EnterPressed)
 		if not EnterPressed then return end
 		Textbox.Value = TextboxAsset.Background.Input.Text
@@ -875,7 +794,6 @@ local function InitTextbox(Parent,ScreenAsset,Window,Textbox)
 		InitToolTip(TextboxAsset,ScreenAsset,Text)
 	end
 end
-
 local function InitKeybind(Parent,ScreenAsset,Window,Keybind)
 	local KeybindAsset = GetAsset("Keybind/Keybind")
 
@@ -884,27 +802,17 @@ local function InitKeybind(Parent,ScreenAsset,Window,Keybind)
 	KeybindAsset.Value.Text = "[ " .. Keybind.Value .. " ]"
 	Keybind.WaitingForBind = false
 
-	local function StartKeybind()
+	KeybindAsset.MouseButton1Click:Connect(function()
 		KeybindAsset.Value.Text = "[ ... ]"
 		Keybind.WaitingForBind = true
-	end
-	
-	KeybindAsset.MouseButton1Click:Connect(StartKeybind)
-	
-	-- Mobile touch support
-	if IsMobile() then
-		KeybindAsset.TouchTap:Connect(StartKeybind)
-	end
-	
+	end)
 	KeybindAsset.Title:GetPropertyChangedSignal("TextBounds"):Connect(function()
 		KeybindAsset.Size = UDim2.new(1,0,0,KeybindAsset.Title.TextBounds.Y)
 	end)
-	
 	KeybindAsset.Value:GetPropertyChangedSignal("TextBounds"):Connect(function()
 		KeybindAsset.Value.Size = UDim2.new(0,KeybindAsset.Value.TextBounds.X,1,0)
 		KeybindAsset.Title.Size = UDim2.new(1,-KeybindAsset.Value.Size.X.Offset,1,0)
 	end)
-	
 	UserInputService.InputBegan:Connect(function(Input)
 		local Key = tostring(Input.KeyCode):gsub("Enum.KeyCode.","")
 		if Keybind.WaitingForBind and Input.UserInputType == Enum.UserInputType.Keyboard then
@@ -951,7 +859,6 @@ local function InitKeybind(Parent,ScreenAsset,Window,Keybind)
 			end
 		end
 	end)
-	
 	UserInputService.InputEnded:Connect(function(Input)
 		local Key = tostring(Input.KeyCode):gsub("Enum.KeyCode.","")
 		if Input.UserInputType == Enum.UserInputType.Keyboard then
@@ -972,6 +879,7 @@ local function InitKeybind(Parent,ScreenAsset,Window,Keybind)
 		end
 	end)
 
+
 	function Keybind:SetName(Name)
 		Keybind.Name = Name
 		KeybindAsset.Title.Text = Name
@@ -990,7 +898,6 @@ local function InitKeybind(Parent,ScreenAsset,Window,Keybind)
 		InitToolTip(KeybindAsset,ScreenAsset,Text)
 	end
 end
-
 local function InitDropdown(Parent,ScreenAsset,Window,Dropdown)
 	local DropdownAsset = GetAsset("Dropdown/Dropdown")
 	local OptionContainerAsset = GetAsset("Dropdown/OptionContainer")
@@ -999,7 +906,7 @@ local function InitDropdown(Parent,ScreenAsset,Window,Dropdown)
 	OptionContainerAsset.Parent = ScreenAsset
 	local ContainerRender = nil
 
-	local function ToggleDropdown()
+	DropdownAsset.MouseButton1Click:Connect(function()
 		if not OptionContainerAsset.Visible and OptionContainerAsset.ListLayout.AbsoluteContentSize.Y ~= 0 then
 			ContainerRender = RunService.RenderStepped:Connect(function()
 				if not OptionContainerAsset.Visible then ContainerRender:Disconnect() end
@@ -1014,13 +921,28 @@ local function InitDropdown(Parent,ScreenAsset,Window,Dropdown)
 			end
 			OptionContainerAsset.Visible = false
 		end
-	end
+	end)
 	
-	DropdownAsset.MouseButton1Click:Connect(ToggleDropdown)
-	
-	-- Mobile touch support
-	if IsMobile() then
-		DropdownAsset.TouchTap:Connect(ToggleDropdown)
+	-- Add touch support for dropdown
+	if UserInputService.TouchEnabled then
+		DropdownAsset.InputBegan:Connect(function(Input)
+			if Input.UserInputType == Enum.UserInputType.Touch then
+				if not OptionContainerAsset.Visible and OptionContainerAsset.ListLayout.AbsoluteContentSize.Y ~= 0 then
+					ContainerRender = RunService.RenderStepped:Connect(function()
+						if not OptionContainerAsset.Visible then ContainerRender:Disconnect() end
+						OptionContainerAsset.Position = UDim2.new(0,DropdownAsset.Background.AbsolutePosition.X,0,
+						DropdownAsset.Background.AbsolutePosition.Y + DropdownAsset.Background.AbsoluteSize.Y + 42)
+						OptionContainerAsset.Size = UDim2.new(0,DropdownAsset.Background.AbsoluteSize.X,0,OptionContainerAsset.ListLayout.AbsoluteContentSize.Y + 2)
+					end)
+					OptionContainerAsset.Visible = true
+				else
+					if ContainerRender then
+						ContainerRender:Disconnect()
+					end
+					OptionContainerAsset.Visible = false
+				end
+			end
+		end)
 	end
 	
 	DropdownAsset.Title:GetPropertyChangedSignal("TextBounds"):Connect(function()
@@ -1079,23 +1001,23 @@ local function InitDropdown(Parent,ScreenAsset,Window,Dropdown)
 		Option.Instance = OptionAsset
 
 		table.insert(Window.Colorable, OptionAsset)
-		
-		local function SelectOption()
+		OptionAsset.MouseButton1Click:Connect(function()
 			SetOptionState(Option,not Option.Value)
-		end
+		end)
 		
-		OptionAsset.MouseButton1Click:Connect(SelectOption)
-		
-		-- Mobile touch support
-		if IsMobile() then
-			OptionAsset.TouchTap:Connect(SelectOption)
+		-- Add touch support for dropdown options
+		if UserInputService.TouchEnabled then
+			OptionAsset.InputBegan:Connect(function(Input)
+				if Input.UserInputType == Enum.UserInputType.Touch then
+					SetOptionState(Option,not Option.Value)
+				end
+			end)
 		end
 		
 		OptionAsset.Title:GetPropertyChangedSignal("TextBounds"):Connect(function()
 			OptionAsset.Size = UDim2.new(1,0,0,OptionAsset.Title.TextBounds.Y + 2)
 		end)
 	end
-	
 	for Index, Option in pairs(Dropdown.List) do
 		if Option.Value then
 			SetOptionState(Option,Option.Value)
@@ -1111,16 +1033,17 @@ local function InitDropdown(Parent,ScreenAsset,Window,Dropdown)
 
 			table.insert(Window.Colorable, OptionAsset)
 			table.insert(Dropdown.List,Option)
-			
-			local function SelectOption()
+			OptionAsset.MouseButton1Click:Connect(function()
 				SetOptionState(Option,not Option.Value)
-			end
+			end)
 			
-			OptionAsset.MouseButton1Click:Connect(SelectOption)
-			
-			-- Mobile touch support
-			if IsMobile() then
-				OptionAsset.TouchTap:Connect(SelectOption)
+			-- Add touch support for new dropdown options
+			if UserInputService.TouchEnabled then
+				OptionAsset.InputBegan:Connect(function(Input)
+					if Input.UserInputType == Enum.UserInputType.Touch then
+						SetOptionState(Option,not Option.Value)
+					end
+				end)
 			end
 			
 			OptionAsset.Title:GetPropertyChangedSignal("TextBounds"):Connect(function()
@@ -1133,7 +1056,6 @@ local function InitDropdown(Parent,ScreenAsset,Window,Dropdown)
 			end
 		end
 	end
-	
 	function Dropdown:RemoveOption(Name)
 		for Index, Option in pairs(Dropdown.List) do
 			if Option.Name == Name then
@@ -1142,14 +1064,12 @@ local function InitDropdown(Parent,ScreenAsset,Window,Dropdown)
 			end
 		end
 	end
-	
 	function Dropdown:Clear()
 		for Index, Option in pairs(Dropdown.List) do
 			Option.Instance:Destroy()
 			Dropdown.List[Index] = nil
 		end
 	end
-	
 	function Dropdown:SetValue(Options)
 		if #Options == 0 then
 			DropdownAsset.Background.Value.Text = "..."
@@ -1174,7 +1094,6 @@ local function InitDropdown(Parent,ScreenAsset,Window,Dropdown)
 		InitToolTip(DropdownAsset,ScreenAsset,Text)
 	end
 end
-
 local function InitColorpicker(Parent,ScreenAsset,Window,Colorpicker)
 	local ColorpickerAsset = GetAsset("Colorpicker/Colorpicker")
 	local PaletteAsset = GetAsset("Colorpicker/Palette")
@@ -1213,7 +1132,10 @@ local function InitColorpicker(Parent,ScreenAsset,Window,Colorpicker)
 	end
 	Update()
 
-	local function TogglePalette()
+	ColorpickerAsset.Title:GetPropertyChangedSignal("TextBounds"):Connect(function()
+		ColorpickerAsset.Size = UDim2.new(1,0,0,ColorpickerAsset.Title.TextBounds.Y)
+	end)
+	ColorpickerAsset.MouseButton1Click:Connect(function()
 		if not PaletteAsset.Visible then
 			PaletteAsset.Visible = true
 			PaletteRender = RunService.RenderStepped:Connect(function()
@@ -1224,18 +1146,25 @@ local function InitColorpicker(Parent,ScreenAsset,Window,Colorpicker)
 			PaletteRender:Disconnect()
 			PaletteAsset.Visible = false
 		end
-	end
-	
-	ColorpickerAsset.MouseButton1Click:Connect(TogglePalette)
-	
-	-- Mobile touch support
-	if IsMobile() then
-		ColorpickerAsset.TouchTap:Connect(TogglePalette)
-	end
-	
-	ColorpickerAsset.Title:GetPropertyChangedSignal("TextBounds"):Connect(function()
-		ColorpickerAsset.Size = UDim2.new(1,0,0,ColorpickerAsset.Title.TextBounds.Y)
 	end)
+	
+	-- Add touch support for colorpicker
+	if UserInputService.TouchEnabled then
+		ColorpickerAsset.InputBegan:Connect(function(Input)
+			if Input.UserInputType == Enum.UserInputType.Touch then
+				if not PaletteAsset.Visible then
+					PaletteAsset.Visible = true
+					PaletteRender = RunService.RenderStepped:Connect(function()
+						if not PaletteAsset.Visible then PaletteRender:Disconnect() end
+						PaletteAsset.Position = UDim2.new(0,(ColorpickerAsset.Color.AbsolutePosition.X - PaletteAsset.AbsoluteSize.X) + 20,0,ColorpickerAsset.Color.AbsolutePosition.Y + 52)
+					end)
+				else
+					PaletteRender:Disconnect()
+					PaletteAsset.Visible = false
+				end
+			end
+		end)
+	end
 	
 	PaletteAsset.SVPicker.InputBegan:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
@@ -1244,7 +1173,7 @@ local function InitColorpicker(Parent,ScreenAsset,Window,Colorpicker)
 			end
 			SVRender = RunService.RenderStepped:Connect(function()
 				if not PaletteAsset.Visible then SVRender:Disconnect() end
-				local Mouse = GetInputPosition(Input)
+				local Mouse = UserInputService:GetMouseLocation()
 				local ColorX = math.clamp(Mouse.X - PaletteAsset.SVPicker.AbsolutePosition.X,0,PaletteAsset.SVPicker.AbsoluteSize.X) / PaletteAsset.SVPicker.AbsoluteSize.X
 
 				local ColorY = math.clamp(Mouse.Y - (PaletteAsset.SVPicker.AbsolutePosition.Y + 36),0,PaletteAsset.SVPicker.AbsoluteSize.Y) / PaletteAsset.SVPicker.AbsoluteSize.Y
@@ -1254,7 +1183,6 @@ local function InitColorpicker(Parent,ScreenAsset,Window,Colorpicker)
 			end)
 		end
 	end)
-	
 	PaletteAsset.SVPicker.InputEnded:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 			if SVRender then
@@ -1262,7 +1190,6 @@ local function InitColorpicker(Parent,ScreenAsset,Window,Colorpicker)
 			end
 		end
 	end)
-	
 	PaletteAsset.Hue.InputBegan:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 			if HueRender then
@@ -1270,14 +1197,13 @@ local function InitColorpicker(Parent,ScreenAsset,Window,Colorpicker)
 			end
 			HueRender = RunService.RenderStepped:Connect(function()
 				if not PaletteAsset.Visible then HueRender:Disconnect() end
-				local Mouse = GetInputPosition(Input)
+				local Mouse = UserInputService:GetMouseLocation()
 				local ColorX = math.clamp(Mouse.X - PaletteAsset.Hue.AbsolutePosition.X,0,PaletteAsset.Hue.AbsoluteSize.X) / PaletteAsset.Hue.AbsoluteSize.X
 				Colorpicker.Value[1] = 1 - ColorX
 				Update()
 			end)
 		end
 	end)
-	
 	PaletteAsset.Hue.InputEnded:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 			if HueRender then
@@ -1285,7 +1211,6 @@ local function InitColorpicker(Parent,ScreenAsset,Window,Colorpicker)
 			end
 		end
 	end)
-	
 	PaletteAsset.Alpha.InputBegan:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 			if AlphaRender then
@@ -1293,14 +1218,13 @@ local function InitColorpicker(Parent,ScreenAsset,Window,Colorpicker)
 			end
 			AlphaRender = RunService.RenderStepped:Connect(function()
 				if not PaletteAsset.Visible then AlphaRender:Disconnect() end
-				local Mouse = GetInputPosition(Input)
+				local Mouse = UserInputService:GetMouseLocation()
 				local ColorX = math.clamp(Mouse.X - PaletteAsset.Alpha.AbsolutePosition.X,0,PaletteAsset.Alpha.AbsoluteSize.X) / PaletteAsset.Alpha.AbsoluteSize.X
 				Colorpicker.Value[4] = math.floor(ColorX * 10^2) / (10^2) -- idk %.2f little bit broken with this
 				Update()
 			end)
 		end
 	end)
-	
 	PaletteAsset.Alpha.InputEnded:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 			if AlphaRender then
@@ -1326,17 +1250,19 @@ local function InitColorpicker(Parent,ScreenAsset,Window,Colorpicker)
 
 	table.insert(Window.Colorable,PaletteAsset.Rainbow.Tick)
 	PaletteAsset.Rainbow.Tick.BackgroundColor3 = Colorpicker.Value[5] and Window.Color or Color3.fromRGB(60,60,60)
-	
-	local function ToggleRainbow()
+	PaletteAsset.Rainbow.MouseButton1Click:Connect(function()
 		Colorpicker.Value[5] = not Colorpicker.Value[5]
 		PaletteAsset.Rainbow.Tick.BackgroundColor3 = Colorpicker.Value[5] and Window.Color or Color3.fromRGB(60,60,60)
-	end
+	end)
 	
-	PaletteAsset.Rainbow.MouseButton1Click:Connect(ToggleRainbow)
-	
-	-- Mobile touch support
-	if IsMobile() then
-		PaletteAsset.Rainbow.TouchTap:Connect(ToggleRainbow)
+	-- Add touch support for rainbow toggle
+	if UserInputService.TouchEnabled then
+		PaletteAsset.Rainbow.InputBegan:Connect(function(Input)
+			if Input.UserInputType == Enum.UserInputType.Touch then
+				Colorpicker.Value[5] = not Colorpicker.Value[5]
+				PaletteAsset.Rainbow.Tick.BackgroundColor3 = Colorpicker.Value[5] and Window.Color or Color3.fromRGB(60,60,60)
+			end
+		end)
 	end
 	
 	RunService.Heartbeat:Connect(function()
@@ -1364,7 +1290,6 @@ local function InitColorpicker(Parent,ScreenAsset,Window,Colorpicker)
 		Colorpicker.Value[3] = Value
 		Update()
 	end)
-	
 	PaletteAsset.HEX.HEXBox.FocusLost:Connect(function(Enter)
 		if not Enter then return end
 		local Hue,Saturation,Value = Color3.fromHex("#" .. PaletteAsset.HEX.HEXBox.Text):ToHSV()
@@ -1391,7 +1316,6 @@ function Bracket:Window(Window)
 	Window.Flags = {}
 
 	local WindowAsset = InitWindow(Bracket.ScreenAsset,Window)
-	
 	function Window:Tab(Tab)
 		Tab = GetType(Tab,{},"table")
 		Tab.Name = GetType(Tab.Name,"Tab","string")
@@ -1709,13 +1633,6 @@ function Bracket:Notification(Notification)
 		NotificationAsset.Title.Close.MouseButton1Click:Connect(function()
 			NotificationAsset:Destroy()
 		end)
-		
-		-- Mobile touch support
-		if IsMobile() then
-			NotificationAsset.Title.Close.TouchTap:Connect(function()
-				NotificationAsset:Destroy()
-			end)
-		end
 	end
 end
 
