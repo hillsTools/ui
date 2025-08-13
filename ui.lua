@@ -885,161 +885,261 @@ local function InitKeybind(Parent,ScreenAsset,Window,Keybind)
 	end
 end
 local function InitDropdown(Parent,ScreenAsset,Window,Dropdown)
-	local DropdownAsset = GetAsset("Dropdown/Dropdown")
-	local OptionContainerAsset = GetAsset("Dropdown/OptionContainer")
-	DropdownAsset.Parent = Parent
-	DropdownAsset.Title.Text = Dropdown.Name
-	OptionContainerAsset.Parent = ScreenAsset
-	local ContainerRender = nil
+    local DropdownAsset = GetAsset("Dropdown/Dropdown")
+    local OptionContainerAsset = GetAsset("Dropdown/OptionContainer")
+    DropdownAsset.Parent = Parent
+    DropdownAsset.Title.Text = Dropdown.Name
+    
+    -- Create a scrolling frame for the options
+    local ScrollFrame = Instance.new("ScrollingFrame")
+    ScrollFrame.Name = "OptionScroller"
+    ScrollFrame.BackgroundTransparency = 1
+    ScrollFrame.BorderSizePixel = 0
+    ScrollFrame.Size = UDim2.new(1, 0, 1, 0)
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    ScrollFrame.ScrollBarThickness = 4
+    ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+    ScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    ScrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+    
+    local ListLayout = Instance.new("UIListLayout")
+    ListLayout.Padding = UDim.new(0, 2)
+    ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    ListLayout.Parent = ScrollFrame
+    
+    OptionContainerAsset.Parent = ScrollFrame
+    ScrollFrame.Parent = ScreenAsset
+    
+    -- Mobile-friendly touch handling
+    local touchStartPos, touchStartTime
+    local touchDebounce = false
+    
+    local function UpdateDropdownPosition()
+        local maxHeight = math.min(300, ScrollFrame.AbsoluteWindowSize.Y - DropdownAsset.AbsolutePosition.Y - 50)
+        ScrollFrame.Size = UDim2.new(1, 0, 0, maxHeight)
+        ScrollFrame.Position = UDim2.new(0, DropdownAsset.AbsolutePosition.X, 0, DropdownAsset.AbsolutePosition.Y + DropdownAsset.AbsoluteSize.Y + 2)
+    end
 
-	DropdownAsset.InputBegan:Connect(function(Input)
-		if (Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch) and not OptionContainerAsset.Visible and OptionContainerAsset.ListLayout.AbsoluteContentSize.Y ~= 0 then
-			ContainerRender = RunService.RenderStepped:Connect(function()
-				if not OptionContainerAsset.Visible then ContainerRender:Disconnect() end
-				OptionContainerAsset.Position = UDim2.new(0,DropdownAsset.Background.AbsolutePosition.X,0,
-				DropdownAsset.Background.AbsolutePosition.Y + DropdownAsset.Background.AbsoluteSize.Y + 42)
-				OptionContainerAsset.Size = UDim2.new(0,DropdownAsset.Background.AbsoluteSize.X,0,OptionContainerAsset.ListLayout.AbsoluteContentSize.Y + 2)
-			end)
-			OptionContainerAsset.Visible = true
-		elseif (Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch) then
-			if ContainerRender then
-				ContainerRender:Disconnect()
-			end
-			OptionContainerAsset.Visible = false
-		end
-	end)
-	DropdownAsset.Title:GetPropertyChangedSignal("TextBounds"):Connect(function()
-		DropdownAsset.Title.Size = UDim2.new(1,0,0,DropdownAsset.Title.TextBounds.Y + 2)
-		DropdownAsset.Background.Position = UDim2.new(0.5,0,0,DropdownAsset.Title.Size.Y.Offset)
-		DropdownAsset.Size = UDim2.new(1,0,0,DropdownAsset.Title.Size.Y.Offset + DropdownAsset.Background.Size.Y.Offset)
-	end)
+    local function HandleTouchInput(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            if input.UserInputState == Enum.UserInputState.Begin then
+                touchStartPos = input.Position
+                touchStartTime = os.clock()
+            elseif input.UserInputState == Enum.UserInputState.End then
+                local touchEndPos = input.Position
+                local touchDuration = os.clock() - touchStartTime
+                local touchDistance = (touchEndPos - touchStartPos).magnitude
+                
+                -- If it's a tap (short duration and small distance)
+                if touchDuration < 0.3 and touchDistance < 10 then
+                    if not touchDebounce then
+                        touchDebounce = true
+                        
+                        if not ScrollFrame.Visible and OptionContainerAsset.ListLayout.AbsoluteContentSize.Y ~= 0 then
+                            UpdateDropdownPosition()
+                            ScrollFrame.Visible = true
+                        elseif ScrollFrame.Visible then
+                            ScrollFrame.Visible = false
+                        end
+                        
+                        task.delay(0.3, function() touchDebounce = false end)
+                    end
+                end
+            end
+        end
+    end
 
-	local function SetOptionState(Option,Toggle)
-		local Selected = {}
+    DropdownAsset.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if not ScrollFrame.Visible and OptionContainerAsset.ListLayout.AbsoluteContentSize.Y ~= 0 then
+                UpdateDropdownPosition()
+                ScrollFrame.Visible = true
+            elseif ScrollFrame.Visible then
+                ScrollFrame.Visible = false
+            end
+        end
+    end)
+    
+    -- Connect touch input handler
+    UserInputService.TouchStarted:Connect(HandleTouchInput)
+    UserInputService.TouchEnded:Connect(HandleTouchInput)
 
-		-- Value Setting
-		if Option.Mode == "Button" then
-			for Index, Option in pairs(Dropdown.List) do
-				if Option.Mode == "Button" then
-					if Option.Instance then
-						Option.Instance.BorderColor3 = Color3.fromRGB(60,60,60)
-					end
-					Option.Value = false
-				end
-			end
-			Option.Value = true
-			OptionContainerAsset.Visible = false
-		elseif Option.Mode == "Toggle" then
-			Option.Value = Toggle
-		end
+    DropdownAsset.Title:GetPropertyChangedSignal("TextBounds"):Connect(function()
+        DropdownAsset.Title.Size = UDim2.new(1, 0, 0, DropdownAsset.Title.TextBounds.Y + 2)
+        DropdownAsset.Background.Position = UDim2.new(0.5, 0, 0, DropdownAsset.Title.Size.Y.Offset)
+        DropdownAsset.Size = UDim2.new(1, 0, 0, DropdownAsset.Title.Size.Y.Offset + DropdownAsset.Background.Size.Y.Offset)
+    end)
 
-		Option.Instance.BorderColor3 = Option.Value
-			and Window.Color or Color3.fromRGB(60,60,60)
+    ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y)
+    end)
 
-		-- Selected Setting
-		for Index, Option in pairs(Dropdown.List) do
-			if Option.Value then
-				Selected[#Selected + 1] = Option.Name
-			end
-		end
+    local function SetOptionState(Option, Toggle)
+        local Selected = {}
 
-		-- Dropdown Title Setting
-		if #Selected == 0 then
-			DropdownAsset.Background.Value.Text = "..."
-		else
-			DropdownAsset.Background.Value.Text = table.concat(Selected,", ")
-		end
+        -- Value Setting
+        if Option.Mode == "Button" then
+            for Index, Option in pairs(Dropdown.List) do
+                if Option.Mode == "Button" then
+                    if Option.Instance then
+                        Option.Instance.BorderColor3 = Color3.fromRGB(60, 60, 60)
+                    end
+                    Option.Value = false
+                end
+            end
+            Option.Value = true
+            ScrollFrame.Visible = false
+        elseif Option.Mode == "Toggle" then
+            Option.Value = Toggle
+        end
 
-		Dropdown.Value = Selected
-		if Option.Callback then
-			Option.Callback(Dropdown.Value,Option)
-		end
-		Window.Flags[Dropdown.Flag] = Dropdown.Value
-	end
+        Option.Instance.BorderColor3 = Option.Value and Window.Color or Color3.fromRGB(60, 60, 60)
 
-	for Index, Option in pairs(Dropdown.List) do
-		local OptionAsset = GetAsset("Dropdown/Option")
-		OptionAsset.Parent = OptionContainerAsset
-		OptionAsset.Title.Text = Option.Name
-		Option.Instance = OptionAsset
+        -- Selected Setting
+        for Index, Option in pairs(Dropdown.List) do
+            if Option.Value then
+                Selected[#Selected + 1] = Option.Name
+            end
+        end
 
-		table.insert(Window.Colorable, OptionAsset)
-		OptionAsset.InputBegan:Connect(function(Input)
-			if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-				SetOptionState(Option,not Option.Value)
-			end
-		end)
-		OptionAsset.Title:GetPropertyChangedSignal("TextBounds"):Connect(function()
-			OptionAsset.Size = UDim2.new(1,0,0,OptionAsset.Title.TextBounds.Y + 2)
-		end)
-	end
-	for Index, Option in pairs(Dropdown.List) do
-		if Option.Value then
-			SetOptionState(Option,Option.Value)
-		end
-	end
+        -- Dropdown Title Setting
+        if #Selected == 0 then
+            DropdownAsset.Background.Value.Text = "..."
+        else
+            DropdownAsset.Background.Value.Text = table.concat(Selected, ", ")
+        end
 
-	function Dropdown:BulkAdd(Table)
-		for Index,Option in pairs(Table) do
-			local OptionAsset = GetAsset("Dropdown/Option")
-			OptionAsset.Parent = OptionContainerAsset
-			OptionAsset.Title.Text = Option.Name
-			Option.Instance = OptionAsset
+        Dropdown.Value = Selected
+        if Option.Callback then
+            Option.Callback(Dropdown.Value, Option)
+        end
+        Window.Flags[Dropdown.Flag] = Dropdown.Value
+    end
 
-			table.insert(Window.Colorable, OptionAsset)
-			table.insert(Dropdown.List,Option)
-			OptionAsset.InputBegan:Connect(function(Input)
-				if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-					SetOptionState(Option,not Option.Value)
-				end
-			end)
-			OptionAsset.Title:GetPropertyChangedSignal("TextBounds"):Connect(function()
-				OptionAsset.Size = UDim2.new(1,0,0,OptionAsset.Title.TextBounds.Y + 2)
-			end)
-		end
-		for Index, Option in pairs(Dropdown.List) do
-			if Option.Value then
-				SetOptionState(Option,Option.Value)
-			end
-		end
-	end
-	function Dropdown:RemoveOption(Name)
-		for Index, Option in pairs(Dropdown.List) do
-			if Option.Name == Name then
-				Option.Instance:Destroy()
-				Dropdown.List[Index] = nil
-			end
-		end
-	end
-	function Dropdown:Clear()
-		for Index, Option in pairs(Dropdown.List) do
-			Option.Instance:Destroy()
-			Dropdown.List[Index] = nil
-		end
-	end
-	function Dropdown:SetValue(Options)
-		if #Options == 0 then
-			DropdownAsset.Background.Value.Text = "..."
-			return
-		end
-		for Index, Option in pairs(Dropdown.List) do
-			if table.find(Options,Option.Name) then
-				SetOptionState(Option,true)
-			else
-				if Option.Mode ~= "Button" then
-					SetOptionState(Option,false)
-				end
-			end
-		end
-	end
+    for Index, Option in pairs(Dropdown.List) do
+        local OptionAsset = GetAsset("Dropdown/Option")
+        OptionAsset.Parent = OptionContainerAsset
+        OptionAsset.Title.Text = Option.Name
+        Option.Instance = OptionAsset
 
-	function Dropdown:SetName(Name)
-		Dropdown.Name = Name
-		DropdownAsset.Title.Text = Name
-	end
-	function Dropdown:ToolTip(Text)
-		InitToolTip(DropdownAsset,ScreenAsset,Text)
-	end
+        table.insert(Window.Colorable, OptionAsset)
+        
+        OptionAsset.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                SetOptionState(Option, not Option.Value)
+            end
+        end)
+        
+        OptionAsset.Title:GetPropertyChangedSignal("TextBounds"):Connect(function()
+            OptionAsset.Size = UDim2.new(1, 0, 0, OptionAsset.Title.TextBounds.Y + 2)
+        end)
+    end
+
+    for Index, Option in pairs(Dropdown.List) do
+        if Option.Value then
+            SetOptionState(Option, Option.Value)
+        end
+    end
+
+    function Dropdown:BulkAdd(Table)
+        for Index, Option in pairs(Table) do
+            local OptionAsset = GetAsset("Dropdown/Option")
+            OptionAsset.Parent = OptionContainerAsset
+            OptionAsset.Title.Text = Option.Name
+            Option.Instance = OptionAsset
+
+            table.insert(Window.Colorable, OptionAsset)
+            table.insert(Dropdown.List, Option)
+            OptionAsset.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    SetOptionState(Option, not Option.Value)
+                end
+            end)
+            OptionAsset.Title:GetPropertyChangedSignal("TextBounds"):Connect(function()
+                OptionAsset.Size = UDim2.new(1, 0, 0, OptionAsset.Title.TextBounds.Y + 2)
+            end)
+        end
+        for Index, Option in pairs(Dropdown.List) do
+            if Option.Value then
+                SetOptionState(Option, Option.Value)
+            end
+        end
+    end
+
+    function Dropdown:RemoveOption(Name)
+        for Index, Option in pairs(Dropdown.List) do
+            if Option.Name == Name then
+                Option.Instance:Destroy()
+                Dropdown.List[Index] = nil
+            end
+        end
+    end
+
+    function Dropdown:Clear()
+        for Index, Option in pairs(Dropdown.List) do
+            Option.Instance:Destroy()
+            Dropdown.List[Index] = nil
+        end
+    end
+
+    function Dropdown:SetValue(Options)
+        if #Options == 0 then
+            DropdownAsset.Background.Value.Text = "..."
+            return
+        end
+        for Index, Option in pairs(Dropdown.List) do
+            if table.find(Options, Option.Name) then
+                SetOptionState(Option, true)
+            else
+                if Option.Mode ~= "Button" then
+                    SetOptionState(Option, false)
+                end
+            end
+        end
+    end
+
+    function Dropdown:SetName(Name)
+        Dropdown.Name = Name
+        DropdownAsset.Title.Text = Name
+    end
+
+    function Dropdown:ToolTip(Text)
+        InitToolTip(DropdownAsset, ScreenAsset, Text)
+    end
+    
+    -- Close dropdown when clicking outside
+    UserInputService.InputBegan:Connect(function(input)
+        if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and ScrollFrame.Visible then
+            local mousePos = input.Position
+            if not DropdownAsset:IsDescendantOf(game) then return end
+            
+            local isInDropdown = PointInRectangle(
+                mousePos,
+                DropdownAsset.AbsolutePosition,
+                DropdownAsset.AbsolutePosition + DropdownAsset.AbsoluteSize
+            )
+            
+            local isInOptions = PointInRectangle(
+                mousePos,
+                ScrollFrame.AbsolutePosition,
+                ScrollFrame.AbsolutePosition + ScrollFrame.AbsoluteSize
+            )
+            
+            if not isInDropdown and not isInOptions then
+                ScrollFrame.Visible = false
+            end
+        end
+    end)
+    
+    -- Helper function to check if a point is within a rectangle
+    local function PointInRectangle(point, corner1, corner2)
+        local minX = math.min(corner1.X, corner2.X)
+        local maxX = math.max(corner1.X, corner2.X)
+        local minY = math.min(corner1.Y, corner2.Y)
+        local maxY = math.max(corner1.Y, corner2.Y)
+        
+        return point.X >= minX and point.X <= maxX and point.Y >= minY and point.Y <= maxY
+    end
 end
 local function InitColorpicker(Parent,ScreenAsset,Window,Colorpicker)
 	local ColorpickerAsset = GetAsset("Colorpicker/Colorpicker")
